@@ -54,12 +54,12 @@ module parc_CoreCtrl
   input         muldivresp_val,
   output        muldivresp_rdy,
   output        muldiv_stall_mult1,
-  output reg [2:0] dmemresp_mux_sel_X1hl,
-  output           dmemresp_queue_en_X1hl,
-  output reg       dmemresp_queue_val_X1hl,
-  output reg       muldiv_mux_sel_X3hl,
-  output reg       execute_mux_sel_X3hl,
-  output reg       memex_mux_sel_X1hl,
+  output  [2:0] dmemresp_mux_sel_X1hl,
+  output        dmemresp_queue_en_X1hl,
+  output        dmemresp_queue_val_X1hl,
+  output        muldiv_mux_sel_X3hl,
+  output        execute_mux_sel_X3hl,
+  output        memex_mux_sel_X1hl,
   output        rfA_wen_out_Whl,
   output  [4:0] rfA_waddr_Whl,
   output        rfB_wen_out_Whl,
@@ -81,7 +81,7 @@ module parc_CoreCtrl
 
   // CP0 Status
 
-  output reg [31:0] cp0_status
+  output [31:0] cp0_status
 );
 
   //----------------------------------------------------------------------
@@ -729,12 +729,7 @@ module parc_CoreCtrl
                          && inst_val_Whl;
 
 
-  // Operand Bypass Mux Select (template wires; connected to output ports below)
-
-  wire [3:0] op00_byp_mux_sel_Dhl;
-  wire [3:0] op01_byp_mux_sel_Dhl;
-  wire [3:0] op10_byp_mux_sel_Dhl;
-  wire [3:0] op11_byp_mux_sel_Dhl;
+  // Operand Bypass Mux Select
 
   assign op00_byp_mux_sel_Dhl
     = (rs0_AX0_byp_Dhl) ? am_AX0_byp
@@ -782,7 +777,7 @@ module parc_CoreCtrl
 
   // Muldiv Function
 
-  assign muldivreq_msg_fn_Dhl = cs0[`PARC_INST_MSG_MULDIV_FN];
+  wire [2:0] muldivreq_msg_fn_Dhl = cs0[`PARC_INST_MSG_MULDIV_FN];
 
   // Muldiv Controls
 
@@ -920,7 +915,7 @@ module parc_CoreCtrl
 
   // Aggregate Stall Signal
 
-  assign stall_Dhl = (stall_X0hl || stall_0_muldiv_use_Dhl || stall_0_load_use_Dhl);
+  wire stall_Dhl = (stall_X0hl || stall_0_muldiv_use_Dhl || stall_0_load_use_Dhl);
 
   // Next bubble bit
 
@@ -997,7 +992,7 @@ module parc_CoreCtrl
 
   assign muldivreq_val = muldivreq_val_Dhl && inst_val_Dhl;
   assign muldivresp_rdy = 1'b1;
-  assign muldiv_stall_mult1 = stall_X1hl;
+  wire muldiv_stall_mult1 = stall_X1hl;
 
   // Only send a valid dmem request if not stalled
 
@@ -1068,8 +1063,8 @@ module parc_CoreCtrl
   reg        is_load_X1hl;
   reg        is_muldiv_X1hl;
   reg        dmemreq_val_X1hl;
-  // reg  [2:0] dmemresp_mux_sel_X1hl; (declared as output reg)
-  // reg        memex_mux_sel_X1hl;    (declared as output reg)
+  reg  [2:0] dmemresp_mux_sel_X1hl;
+  reg        memex_mux_sel_X1hl;
   reg        execute_mux_sel_X1hl;
   reg        muldiv_mux_sel_X1hl;
   reg        rf0_wen_X1hl;
@@ -1133,7 +1128,7 @@ module parc_CoreCtrl
 
   // Aggregate Stall Signal
 
-  assign stall_X1hl = ( stall_imem_X1hl || stall_dmem_X1hl );
+  wire stall_X1hl = ( stall_imem_X1hl || stall_dmem_X1hl );
 
   // Next bubble bit
 
@@ -1148,7 +1143,7 @@ module parc_CoreCtrl
 
   reg [31:0] ir0_X2hl;
   reg        is_muldiv_X2hl;
-  // reg        dmemresp_queue_val_X1hl; (declared as output reg)
+  reg        dmemresp_queue_val_X1hl;
   reg        rf0_wen_X2hl;
   reg  [4:0] rf0_waddr_X2hl;
   reg        cp0_wen_X2hl;
@@ -1193,7 +1188,7 @@ module parc_CoreCtrl
 
   // Dummy Stall Signal
 
-  assign stall_X2hl = 1'b0;
+  wire stall_X2hl = 1'b0;
 
   // Next bubble bit
 
@@ -1212,8 +1207,8 @@ module parc_CoreCtrl
   reg  [4:0] rf0_waddr_X3hl;
   reg        cp0_wen_X3hl;
   reg  [4:0] cp0_addr_X3hl;
-  // reg        execute_mux_sel_X3hl; (declared as output reg)
-  // reg        muldiv_mux_sel_X3hl;  (declared as output reg)
+  reg        execute_mux_sel_X3hl;
+  reg        muldiv_mux_sel_X3hl;
 
   reg        bubble_X3hl;
 
@@ -1251,7 +1246,7 @@ module parc_CoreCtrl
 
   // Dummy Stall Signal
 
-  assign stall_X3hl = 1'b0;
+  wire stall_X3hl = 1'b0;
 
   // Next bubble bit
 
@@ -1299,72 +1294,12 @@ module parc_CoreCtrl
 
   // Only set register file wen if stage is valid
 
-  assign rfA_wen_out_Whl = ( inst_val_Whl && !stall_Whl && rf0_wen_Whl );
+  assign rf0_wen_out_Whl = ( inst_val_Whl && !stall_Whl && rf0_wen_Whl );
 
   // Dummy squash and stall signals
 
   wire squash_Whl = 1'b0;
-  assign stall_Whl  = 1'b0;
-
-  //----------------------------------------------------------------------
-  // Part 1 stub declarations and output port assignments
-  //----------------------------------------------------------------------
-
-  // Steering mux select: 0 = steer inst0, 1 = steer inst1 (Part 1 stub)
-  wire steering_mux_sel = 1'b0;
-
-  // Per-instruction decode stall signals (Part 1 stub)
-  wire stall_0_Dhl = stall_Dhl;
-  wire stall_1_Dhl = 1'b0;
-
-  // Pipeline A register file control: rf0_* signals are the A-pipeline regs
-  wire        rfA_wen_X0hl   = rf0_wen_X0hl;
-  wire [4:0]  rfA_waddr_X0hl = rf0_waddr_X0hl;
-  wire        rfA_wen_X1hl   = rf0_wen_X1hl;
-  wire [4:0]  rfA_waddr_X1hl = rf0_waddr_X1hl;
-  wire        rfA_wen_X2hl   = rf0_wen_X2hl;
-  wire [4:0]  rfA_waddr_X2hl = rf0_waddr_X2hl;
-  wire        rfA_wen_X3hl   = rf0_wen_X3hl;
-  wire [4:0]  rfA_waddr_X3hl = rf0_waddr_X3hl;
-  wire        rfA_wen_Whl    = rf0_wen_Whl;
-
-  // Pipeline instruction debug wires
-  wire [31:0] irA_X0hl = ir0_X0hl;
-  wire [31:0] irA_X1hl = ir0_X1hl;
-  wire [31:0] irA_X2hl = ir0_X2hl;
-  wire [31:0] irA_X3hl = ir0_X3hl;
-  wire [31:0] irA_Whl  = ir0_Whl;
-  wire [31:0] irB_X0hl = 32'b0;
-  wire [31:0] irB_X1hl = 32'b0;
-  wire [31:0] irB_X2hl = 32'b0;
-  wire [31:0] irB_X3hl = 32'b0;
-  wire [31:0] irB_Whl  = 32'b0;
-
-  // Output port: instruction words sent to datapath
-  assign instA_Dhl = ir0_Dhl;
-  assign instB_Dhl = ir1_Dhl;
-
-  // Output port: ALU function (A uses alu0; B is stub)
-  assign aluA_fn_X0hl = alu0_fn_X0hl;
-  assign aluB_fn_X0hl = 4'b0;
-
-  // Output port: PC offset mux (Part 1 stub: use pc+4)
-  assign pc_offset_mux_sel_Dhl = 1'b0;
-
-  // Output ports: operand mux selects (connect template wires to ports)
-  assign opA0_byp_mux_sel_Dhl = op00_byp_mux_sel_Dhl;
-  assign opA1_byp_mux_sel_Dhl = op01_byp_mux_sel_Dhl;
-  assign opB0_byp_mux_sel_Dhl = op10_byp_mux_sel_Dhl;
-  assign opB1_byp_mux_sel_Dhl = op11_byp_mux_sel_Dhl;
-  assign opA0_mux_sel_Dhl     = op00_mux_sel_Dhl;
-  assign opA1_mux_sel_Dhl     = op01_mux_sel_Dhl;
-  assign opB0_mux_sel_Dhl     = op10_mux_sel_Dhl;
-  assign opB1_mux_sel_Dhl     = op11_mux_sel_Dhl;
-
-  // Output ports: register file writeback (B pipeline stub)
-  assign rfA_waddr_Whl   = rf0_waddr_Whl;
-  assign rfB_wen_out_Whl = 1'b0;
-  assign rfB_waddr_Whl   = 5'b0;
+  wire stall_Whl  = 1'b0;
 
   //----------------------------------------------------------------------
   // Debug registers for instruction disassembly
@@ -1384,7 +1319,7 @@ module parc_CoreCtrl
   // Coprocessor 0
   //----------------------------------------------------------------------
 
-  // reg  [31:0] cp0_status; (declared as output reg)
+  reg  [31:0] cp0_status;
   reg         cp0_stats;
 
   always @ ( posedge clk ) begin
