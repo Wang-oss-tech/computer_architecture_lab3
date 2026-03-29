@@ -1,0 +1,11 @@
+build/*.vcd
+imuldiv/*.vcd
+mcparc/*.vcd
+pv2byp/*.vcd
+pv2dualfetch/*.vcd
+pv2stall/*.vcd
+tests/*.vcd
+tests/build/*.vcd
+tests/build/vmh/*.vcd
+ubmark/*.vcd
+vc/*.vcd
