@@ -299,6 +299,11 @@ VPATH := $(addprefix $(topdir)/, $(subpkgs))
 VPATH += $(topdir)/tests/build/vmh
 VPATH += $(topdir)/ubmark/build/vmh
 
+# Support repositories that keep generated VMH files directly under
+# tests/vmh and ubmark/vmh (without an intermediate build directory).
+VPATH += $(topdir)/tests/vmh
+VPATH += $(topdir)/ubmark/vmh
+
 #-------------------------------------------------------------------------
 # Template for per subpackage rules
 #-------------------------------------------------------------------------
