@@ -181,7 +181,8 @@ module parc_CoreCtrl
     = ( imemresp0_val || imemresp0_queue_val_Fhl )
    && ( imemresp1_val || imemresp1_queue_val_Fhl );
   assign waiting_for_pair_Dhl = need_new_pair_Dhl && !imem_pair_ready_Dhl;
-  assign load_new_pair_Dhl = ( !stall_Dhl && need_new_pair_Dhl && imem_pair_ready_Dhl );
+  assign load_new_pair_Dhl
+    = ( !stall_Dhl && need_new_pair_Dhl && imem_pair_ready_Dhl );
 
   // Any taken control transfer squashes F; flush queued imem responses
   // so stale fall-through instructions cannot be re-issued after redirect.
@@ -260,17 +261,17 @@ module parc_CoreCtrl
     if ( reset ) begin
       ir0_Dhl <= `PARC_INST_MSG_NOP;
       ir1_Dhl <= `PARC_INST_MSG_NOP;
+      steering_mux_sel <= 1'b0; 
+      bubble_Dhl <= 1'b1;
+    end
+    else if ( squash_Dhl ) begin
+      ir0_Dhl <= `PARC_INST_MSG_NOP;
+      ir1_Dhl <= `PARC_INST_MSG_NOP;
       steering_mux_sel <= 1'b0;
       bubble_Dhl <= 1'b1;
     end
     else if( !stall_Dhl ) begin
-      if ( squash_redirect_Dhl ) begin
-        ir0_Dhl <= `PARC_INST_MSG_NOP;
-        ir1_Dhl <= `PARC_INST_MSG_NOP;
-        steering_mux_sel <= 1'b0;
-        bubble_Dhl <= 1'b1;
-      end
-      else if ( load_new_pair_Dhl ) begin
+      if ( load_new_pair_Dhl ) begin
         // Steering state uses slot-1 first then slot-0 in the next cycle.
         // Store pair words accordingly so dynamic issue order remains in
         // program order: slot0 (lower address) then slot1 (higher address).
