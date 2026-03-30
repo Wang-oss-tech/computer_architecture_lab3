@@ -8,6 +8,7 @@
 module parc_CoreDpathRegfile
 (
   input         clk,
+  input         reset,
   input  [ 4:0] raddr0,  // Read 0 address (combinational input)
   output [31:0] rdata0,  // Read 0 data (combinational on raddr)
   input  [ 4:0] raddr1,  // Read 1 address (combinational input)
@@ -34,15 +35,21 @@ module parc_CoreDpathRegfile
   assign rdata3 = ( raddr3 == 0 ) ? 32'b0 : registers[raddr3];
 
   // Write port is active only when wen is asserted
+  integer i;
   always @( posedge clk )
   begin
-    if ( wen0_p && (waddr0_p != 5'b0) )
-      registers[waddr0_p] <= wdata0_p;
-    if ( wen1_p && (waddr1_p != 5'b0) )
-      registers[waddr1_p] <= wdata1_p;
+    if ( reset ) begin
+      for ( i = 0; i < 32; i = i + 1 )
+        registers[i] <= 32'b0;
+    end
+    else begin
+      if ( wen0_p && (waddr0_p != 5'b0) )
+        registers[waddr0_p] <= wdata0_p;
+      if ( wen1_p && (waddr1_p != 5'b0) )
+        registers[waddr1_p] <= wdata1_p;
+    end
   end
 
 endmodule
 
 `endif
-

@@ -29,6 +29,7 @@ module parc_CoreDpath
   // Controls Signals (ctrl->dpath)
 
   input   [1:0] pc_mux_sel_Phl,
+  input         load_new_pair_Dhl,
   input         pc_offset_mux_sel_Dhl,
   input   [3:0] opA0_byp_mux_sel_Dhl,
   input   [1:0] opA0_mux_sel_Dhl,
@@ -149,7 +150,12 @@ module parc_CoreDpath
   reg [31:0] pc_plus8_Dhl;
 
   always @ (posedge clk) begin
-    if( !stall_Dhl ) begin
+    if( reset ) begin
+      pc_Dhl       <= reset_vector;
+      pc_plus4_Dhl <= reset_vector + 32'd4;
+      pc_plus8_Dhl <= reset_vector + 32'd8;
+    end
+    else if( load_new_pair_Dhl ) begin
       pc_Dhl       <= pc_Fhl;
       pc_plus4_Dhl <= pc_plus4_Fhl;
       pc_plus8_Dhl <= pc_plus8_Fhl;
@@ -380,7 +386,16 @@ module parc_CoreDpath
   reg [31:0] wdata_X0hl;
 
   always @ (posedge clk) begin
-    if( !stall_X0hl ) begin
+    if( reset ) begin
+      pc_X0hl           <= 32'b0;
+      branch_targ_X0hl  <= 32'b0;
+      opA0_mux_out_X0hl <= 32'b0;
+      opA1_mux_out_X0hl <= 32'b0;
+      opB0_mux_out_X0hl <= 32'b0;
+      opB1_mux_out_X0hl <= 32'b0;
+      wdata_X0hl        <= 32'b0;
+    end
+    else if( !stall_X0hl ) begin
       pc_X0hl           <= pc_Dhl;
       branch_targ_X0hl  <= branch_targ_Dhl;
       opA0_mux_out_X0hl <= opA0_mux_out_Dhl;
@@ -456,7 +471,13 @@ module parc_CoreDpath
   reg  [31:0] wdata_X1hl;
 
   always @ (posedge clk) begin
-    if( !stall_X1hl ) begin
+    if( reset ) begin
+      pc_X1hl               <= 32'b0;
+      executeA_mux_out_X1hl <= 32'b0;
+      executeB_mux_out_X1hl <= 32'b0;
+      wdata_X1hl            <= 32'b0;
+    end
+    else if( !stall_X1hl ) begin
       pc_X1hl               <= pc_X0hl;
       executeA_mux_out_X1hl <= aluA_out_X0hl;
       executeB_mux_out_X1hl <= aluB_out_X0hl;
@@ -497,7 +518,10 @@ module parc_CoreDpath
   reg [31:0] dmemresp_queue_reg_X1hl;
 
   always @ ( posedge clk ) begin
-    if ( dmemresp_queue_en_X1hl ) begin
+    if ( reset ) begin
+      dmemresp_queue_reg_X1hl <= 32'b0;
+    end
+    else if ( dmemresp_queue_en_X1hl ) begin
       dmemresp_queue_reg_X1hl <= dmemresp_mux_out_X1hl;
     end
   end
@@ -530,7 +554,12 @@ module parc_CoreDpath
   reg  [31:0] memexB_mux_out_X2hl;
 
   always @ (posedge clk) begin
-    if( !stall_X2hl ) begin
+    if( reset ) begin
+      pc_X2hl             <= 32'b0;
+      memexA_mux_out_X2hl <= 32'b0;
+      memexB_mux_out_X2hl <= 32'b0;
+    end
+    else if( !stall_X2hl ) begin
       pc_X2hl                  <= pc_X1hl;
       memexA_mux_out_X2hl      <= memexA_mux_out_X1hl;
       memexB_mux_out_X2hl      <= memexB_mux_out_X1hl;
@@ -546,7 +575,12 @@ module parc_CoreDpath
   reg  [31:0] memexB_mux_out_X3hl;
 
   always @ (posedge clk) begin
-    if( !stall_X3hl ) begin
+    if( reset ) begin
+      pc_X3hl             <= 32'b0;
+      memexA_mux_out_X3hl <= 32'b0;
+      memexB_mux_out_X3hl <= 32'b0;
+    end
+    else if( !stall_X3hl ) begin
       pc_X3hl                  <= pc_X2hl;
       memexA_mux_out_X3hl      <= memexA_mux_out_X2hl;
       memexB_mux_out_X3hl      <= memexB_mux_out_X2hl;
@@ -580,7 +614,12 @@ module parc_CoreDpath
   reg  [31:0] wbB_mux_out_Whl;
 
   always @ (posedge clk) begin
-    if( !stall_Whl ) begin
+    if( reset ) begin
+      pc_Whl          <= 32'b0;
+      wbA_mux_out_Whl <= 32'b0;
+      wbB_mux_out_Whl <= 32'b0;
+    end
+    else if( !stall_Whl ) begin
       pc_Whl                  <= pc_X3hl;
       wbA_mux_out_Whl         <= executeA_mux_out_X3hl;
       wbB_mux_out_Whl         <= memexB_mux_out_X3hl;
@@ -598,6 +637,7 @@ module parc_CoreDpath
   parc_CoreDpathRegfile rfile
   (
     .clk      (clk),
+    .reset    (reset),
     .raddr0   (rfA_raddr0_Dhl),
     .rdata0   (rfA_rdata0_Dhl),
     .raddr1   (rfA_raddr1_Dhl),
@@ -621,10 +661,14 @@ module parc_CoreDpath
   reg [31:0] pc_debug;
 
   always @ ( posedge clk ) begin
-    pc_debug <= pc_Whl;
+    if ( reset ) begin
+      pc_debug <= reset_vector;
+    end
+    else begin
+      pc_debug <= pc_Whl;
+    end
   end
 
 endmodule
 
 `endif
-

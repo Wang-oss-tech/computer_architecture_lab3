@@ -66,6 +66,7 @@ module parc_Core
   wire [31:0] dmemresp_msg_data;
 
   wire  [1:0] pc_mux_sel_Phl;
+  wire        load_new_pair_Dhl;
   wire        pc_offset_mux_sel_Dhl;
   wire  [3:0] opA0_byp_mux_sel_Dhl;
   wire  [1:0] opA0_mux_sel_Dhl;
@@ -201,7 +202,8 @@ module parc_Core
     // Controls Signals (ctrl->dpath)
 
     .pc_mux_sel_Phl          (pc_mux_sel_Phl),
-    .pc_offset_mux_sel_Dhl    (pc_offset_mux_sel_Dhl),
+    .load_new_pair_Dhl       (load_new_pair_Dhl),
+    .pc_offset_mux_sel_Dhl   (pc_offset_mux_sel_Dhl),
     .opA0_byp_mux_sel_Dhl    (opA0_byp_mux_sel_Dhl),
     .opA0_mux_sel_Dhl        (opA0_mux_sel_Dhl),
     .opA1_byp_mux_sel_Dhl    (opA1_byp_mux_sel_Dhl),
@@ -273,6 +275,7 @@ module parc_Core
     // Controls Signals (ctrl->dpath)
 
     .pc_mux_sel_Phl           (pc_mux_sel_Phl),
+    .load_new_pair_Dhl        (load_new_pair_Dhl),
     .pc_offset_mux_sel_Dhl    (pc_offset_mux_sel_Dhl),
     .opA0_byp_mux_sel_Dhl     (opA0_byp_mux_sel_Dhl),
     .opA0_mux_sel_Dhl         (opA0_mux_sel_Dhl),
@@ -321,4 +324,3 @@ module parc_Core
 endmodule
 
 `endif
-

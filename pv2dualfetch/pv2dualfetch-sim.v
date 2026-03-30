@@ -44,8 +44,8 @@ module parc_sim;
   // Reset signals for processor and memory
   //----------------------------------------------------------------------
 
-  reg reset_mem;
-  reg reset_proc;
+  reg reset_mem  = 1'b1;
+  reg reset_proc = 1'b1;
 
   always @ ( posedge clk ) begin
     reset_mem  <= reset;
@@ -514,4 +514,3 @@ module parc_sim;
   end
 
 endmodule
-

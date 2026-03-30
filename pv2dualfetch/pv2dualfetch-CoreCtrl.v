@@ -35,6 +35,7 @@ module parc_CoreCtrl
   // Controls Signals (ctrl->dpath)
 
   output  [1:0] pc_mux_sel_Phl,
+  output        load_new_pair_Dhl,
   output        pc_offset_mux_sel_Dhl,
   output  [3:0] opA0_byp_mux_sel_Dhl,
   output  [1:0] opA0_mux_sel_Dhl,
@@ -97,7 +98,8 @@ module parc_CoreCtrl
 
   // Only send a valid imem request if not stalled
 
-  wire   imemreq_val_Phl = reset || !stall_Phl;
+  wire waiting_for_pair_Dhl;
+  wire   imemreq_val_Phl = reset || !stall_Phl || waiting_for_pair_Dhl;
   assign imemreq0_val     = imemreq_val_Phl;
   assign imemreq1_val     = imemreq_val_Phl;
 
@@ -153,9 +155,12 @@ module parc_CoreCtrl
     = ( inst_val_Dhl && brj_taken_Dhl )
    || ( inst_val_X0hl && brj_taken_X0hl );
 
-  // Stall in F if D is stalled
-
-  assign stall_Fhl = stall_Dhl;
+  // Stall in F if D is stalled and while issuing the second instruction
+  // from the fetched pair (single-issue dual-fetch behavior).
+  // Exception: if the currently-issued instruction is a D-stage
+  // control transfer (j/jal/jr/jalr), we must allow F to update PC
+  // immediately, otherwise the redirect gets dropped.
+  assign stall_Fhl = stall_Dhl || ( steering_mux_sel && !brj_taken_Dhl );
 
   // Next bubble bit
 
@@ -168,13 +173,32 @@ module parc_CoreCtrl
   // Queue for instruction memory response
   //----------------------------------------------------------------------
 
-  wire imemresp0_queue_en_Fhl = ( stall_Dhl && imemresp0_val );
-  wire imemresp0_queue_val_next_Fhl
-    = stall_Dhl && ( imemresp0_val || imemresp0_queue_val_Fhl );
+  wire need_new_pair_Dhl = !steering_mux_sel;
+  wire imem_pair_ready_Dhl
+    = ( imemresp0_val || imemresp0_queue_val_Fhl )
+   && ( imemresp1_val || imemresp1_queue_val_Fhl );
+  assign waiting_for_pair_Dhl = need_new_pair_Dhl && !imem_pair_ready_Dhl;
+  assign load_new_pair_Dhl = ( !stall_Dhl && need_new_pair_Dhl && imem_pair_ready_Dhl );
 
-  wire imemresp1_queue_en_Fhl = ( stall_Dhl && imemresp1_val );
+  // Any taken control transfer squashes F; flush queued imem responses
+  // so stale fall-through instructions cannot be re-issued after redirect.
+  wire flush_imem_queue_Fhl = squash_Fhl;
+
+  wire imemresp0_queue_en_Fhl
+    = ( !flush_imem_queue_Fhl && !load_new_pair_Dhl && imemresp0_val );
+  wire imemresp0_queue_val_next_Fhl
+    = flush_imem_queue_Fhl   ? 1'b0
+    : imemresp0_queue_en_Fhl ? 1'b1
+    : load_new_pair_Dhl      ? 1'b0
+    :                         imemresp0_queue_val_Fhl;
+
+  wire imemresp1_queue_en_Fhl
+    = ( !flush_imem_queue_Fhl && !load_new_pair_Dhl && imemresp1_val );
   wire imemresp1_queue_val_next_Fhl
-    = stall_Dhl && ( imemresp1_val || imemresp1_queue_val_Fhl );
+    = flush_imem_queue_Fhl   ? 1'b0
+    : imemresp1_queue_en_Fhl ? 1'b1
+    : load_new_pair_Dhl      ? 1'b0
+    :                         imemresp1_queue_val_Fhl;
 
   reg [31:0] imemresp0_queue_reg_Fhl;
   reg        imemresp0_queue_val_Fhl;
@@ -183,14 +207,22 @@ module parc_CoreCtrl
   reg        imemresp1_queue_val_Fhl;
 
   always @ ( posedge clk ) begin
-    if ( imemresp0_queue_en_Fhl ) begin
-      imemresp0_queue_reg_Fhl <= imemresp0_msg_data;
+    if ( reset ) begin
+      imemresp0_queue_reg_Fhl <= 32'b0;
+      imemresp1_queue_reg_Fhl <= 32'b0;
+      imemresp0_queue_val_Fhl <= 1'b0;
+      imemresp1_queue_val_Fhl <= 1'b0;
     end
-    if ( imemresp1_queue_en_Fhl ) begin
-      imemresp1_queue_reg_Fhl <= imemresp1_msg_data;
+    else begin
+      if ( imemresp0_queue_en_Fhl ) begin
+        imemresp0_queue_reg_Fhl <= imemresp0_msg_data;
+      end
+      if ( imemresp1_queue_en_Fhl ) begin
+        imemresp1_queue_reg_Fhl <= imemresp1_msg_data;
+      end
+      imemresp0_queue_val_Fhl <= imemresp0_queue_val_next_Fhl;
+      imemresp1_queue_val_Fhl <= imemresp1_queue_val_next_Fhl;
     end
-    imemresp0_queue_val_Fhl <= imemresp0_queue_val_next_Fhl;
-    imemresp1_queue_val_Fhl <= imemresp1_queue_val_next_Fhl;
   end
 
   //----------------------------------------------------------------------
@@ -215,19 +247,38 @@ module parc_CoreCtrl
   reg [31:0] ir1_Dhl;
   reg        bubble_Dhl;
 
-  wire steering_mux_sel = 1'b0;
+  reg steering_mux_sel;
 
   wire squash_first_D_inst =
     (inst_val_Dhl && !stall_0_Dhl && stall_1_Dhl);
+  wire squash_redirect_Dhl = squash_Dhl || ( inst_val_Dhl && brj_taken_Dhl );
 
   always @ ( posedge clk ) begin
     if ( reset ) begin
+      ir0_Dhl <= `PARC_INST_MSG_NOP;
+      ir1_Dhl <= `PARC_INST_MSG_NOP;
+      steering_mux_sel <= 1'b0;
       bubble_Dhl <= 1'b1;
     end
     else if( !stall_Dhl ) begin
-      ir0_Dhl    <= imemresp0_queue_mux_out_Fhl;
-      ir1_Dhl    <= imemresp1_queue_mux_out_Fhl;
-      bubble_Dhl <= bubble_next_Fhl;
+      if ( squash_redirect_Dhl ) begin
+        ir0_Dhl <= `PARC_INST_MSG_NOP;
+        ir1_Dhl <= `PARC_INST_MSG_NOP;
+        steering_mux_sel <= 1'b0;
+        bubble_Dhl <= 1'b1;
+      end
+      else if ( load_new_pair_Dhl ) begin
+        // Steering state uses slot-1 first then slot-0 in the next cycle.
+        // Store pair words accordingly so dynamic issue order remains in
+        // program order: slot0 (lower address) then slot1 (higher address).
+        ir0_Dhl <= imemresp1_queue_mux_out_Fhl;
+        ir1_Dhl <= imemresp0_queue_mux_out_Fhl;
+        steering_mux_sel <= 1'b1;
+        bubble_Dhl <= bubble_next_Fhl;
+      end
+      else if ( steering_mux_sel ) begin
+        steering_mux_sel <= 1'b0;
+      end
     end
   end
 
@@ -438,7 +489,8 @@ module parc_CoreCtrl
 
   always @ (*) begin
 
-    cs0 = {cs_sz{1'bx}}; // Default to invalid instruction
+    // Safe default (deterministic nop-style control) to avoid X-propagation.
+    cs0 = { y,  n,    br_none, pm_p,   am_rdat, n, bm_rdat, n, alu_add,  md_mul,  n, mdm_l, em_alu, nr,  ml_w, dmm_w,  wm_alu, n,  r0,  n   };
 
     casez ( ir0_Dhl )
 
@@ -505,7 +557,8 @@ module parc_CoreCtrl
 
   always @ (*) begin
 
-    cs1 = {cs_sz{1'bx}}; // Default to invalid instruction
+    // Safe default (deterministic nop-style control) to avoid X-propagation.
+    cs1 = { y,  n,    br_none, pm_p,   am_rdat, n, bm_rdat, n, alu_add,  md_mul,  n, mdm_l, em_alu, nr,  ml_w, dmm_w,  wm_alu, n,  r0,  n   };
 
     casez ( ir1_Dhl )
 
@@ -572,38 +625,35 @@ module parc_CoreCtrl
 
   // Steering Logic
 
-  always @(*)
-  begin
-    
+  reg [31:0] ir_Dhl_steer;
+  wire [cs_sz-1:0] cs_Dhl = ( steering_mux_sel == 1'b0 ) ? cs0 : cs1;
+
+  always @(*) begin
     if ( steering_mux_sel == 1'b0 )
-    begin
-
-    end
-    else if ( steering_mux_sel == 1'b1 )
-    begin
-
-    end
+      ir_Dhl_steer = ir0_Dhl;
+    else
+      ir_Dhl_steer = ir1_Dhl;
   end
 
   // Jump and Branch Controls
 
-  wire       brj_taken_Dhl = ( inst_val_Dhl && cs0[`PARC_INST_MSG_J_EN] );
-  wire [2:0] br_sel_Dhl    = cs0[`PARC_INST_MSG_BR_SEL];
+  wire       brj_taken_Dhl = ( inst_val_Dhl === 1'b1 ) && cs_Dhl[`PARC_INST_MSG_J_EN];
+  wire [2:0] br_sel_Dhl    = cs_Dhl[`PARC_INST_MSG_BR_SEL];
 
   // PC Mux Select
 
-  wire [1:0] pc_mux_sel_Dhl = cs0[`PARC_INST_MSG_PC_SEL];
+  wire [1:0] pc_mux_sel_Dhl = cs_Dhl[`PARC_INST_MSG_PC_SEL];
 
   // Operand Bypassing Logic
 
-  wire [4:0] rs0_addr_Dhl  = inst0_rs_Dhl;
-  wire [4:0] rt0_addr_Dhl  = inst0_rt_Dhl;
+  wire [4:0] rs0_addr_Dhl  = ( steering_mux_sel == 1'b0 ) ? inst0_rs_Dhl : inst1_rs_Dhl;
+  wire [4:0] rt0_addr_Dhl  = ( steering_mux_sel == 1'b0 ) ? inst0_rt_Dhl : inst1_rt_Dhl;
 
   wire [4:0] rs1_addr_Dhl  = inst1_rs_Dhl;
   wire [4:0] rt1_addr_Dhl  = inst1_rt_Dhl;
 
-  wire       rs0_en_Dhl    = cs0[`PARC_INST_MSG_RS_EN];
-  wire       rt0_en_Dhl    = cs0[`PARC_INST_MSG_RT_EN];
+  wire       rs0_en_Dhl    = cs_Dhl[`PARC_INST_MSG_RS_EN];
+  wire       rt0_en_Dhl    = cs_Dhl[`PARC_INST_MSG_RT_EN];
 
   wire       rs1_en_Dhl    = cs1[`PARC_INST_MSG_RS_EN];
   wire       rt1_en_Dhl    = cs1[`PARC_INST_MSG_RT_EN];
@@ -752,21 +802,21 @@ module parc_CoreCtrl
     : (rs0_AW_byp_Dhl)  ? am_AW_byp
     :                    am_r0;
 
-  assign opB0_byp_mux_sel_Dhl
-    = (rt0_AX0_byp_Dhl) ? bm_AX0_byp
-    : (rt0_AX1_byp_Dhl) ? bm_AX1_byp
-    : (rt0_AX2_byp_Dhl) ? bm_AX2_byp
-    : (rt0_AX3_byp_Dhl) ? bm_AX3_byp
-    : (rt0_AW_byp_Dhl)  ? bm_AW_byp
-    :                     bm_r1;
-
   assign opA1_byp_mux_sel_Dhl
-    = (rs1_AX0_byp_Dhl) ? am_AX0_byp
-    : (rs1_AX1_byp_Dhl) ? am_AX1_byp
-    : (rs1_AX2_byp_Dhl) ? am_AX2_byp
-    : (rs1_AX3_byp_Dhl) ? am_AX3_byp
-    : (rs1_AW_byp_Dhl) ? am_AW_byp
+    = (rt0_AX0_byp_Dhl) ? am_AX0_byp
+    : (rt0_AX1_byp_Dhl) ? am_AX1_byp
+    : (rt0_AX2_byp_Dhl) ? am_AX2_byp
+    : (rt0_AX3_byp_Dhl) ? am_AX3_byp
+    : (rt0_AW_byp_Dhl)  ? am_AW_byp
     :                    am_r0;
+
+  assign opB0_byp_mux_sel_Dhl
+    = (rs1_AX0_byp_Dhl) ? bm_AX0_byp
+    : (rs1_AX1_byp_Dhl) ? bm_AX1_byp
+    : (rs1_AX2_byp_Dhl) ? bm_AX2_byp
+    : (rs1_AX3_byp_Dhl) ? bm_AX3_byp
+    : (rs1_AW_byp_Dhl)  ? bm_AW_byp
+    :                     bm_r1;
 
   assign opB1_byp_mux_sel_Dhl
     = (rt1_AX0_byp_Dhl) ? bm_AX0_byp
@@ -778,8 +828,8 @@ module parc_CoreCtrl
 
   // Operand Mux Select
 
-  wire [1:0] op00_mux_sel_Dhl = cs0[`PARC_INST_MSG_OP0_SEL];
-  wire [2:0] op01_mux_sel_Dhl = cs0[`PARC_INST_MSG_OP1_SEL];
+  wire [1:0] op00_mux_sel_Dhl = cs_Dhl[`PARC_INST_MSG_OP0_SEL];
+  wire [2:0] op01_mux_sel_Dhl = cs_Dhl[`PARC_INST_MSG_OP1_SEL];
 
   wire [1:0] op10_mux_sel_Dhl = cs1[`PARC_INST_MSG_OP0_SEL];
   wire [2:0] op11_mux_sel_Dhl = cs1[`PARC_INST_MSG_OP1_SEL];
@@ -791,59 +841,59 @@ module parc_CoreCtrl
 
   // ALU Function
 
-  wire [3:0] alu0_fn_Dhl = cs0[`PARC_INST_MSG_ALU_FN];
+  wire [3:0] alu0_fn_Dhl = cs_Dhl[`PARC_INST_MSG_ALU_FN];
   wire [3:0] alu1_fn_Dhl = cs1[`PARC_INST_MSG_ALU_FN];
 
-  assign aluA_fn_X0hl = alu0_fn_Dhl;
-  assign aluB_fn_X0hl = alu1_fn_Dhl;
+  assign aluA_fn_X0hl = alu0_fn_X0hl;
+  assign aluB_fn_X0hl = alu1_fn_X0hl;
 
-  assign instA_Dhl = ir0_Dhl;
+  assign instA_Dhl = ir_Dhl_steer;
   assign instB_Dhl = ir1_Dhl;
 
-  assign pc_offset_mux_sel_Dhl = 1'b0;
+  assign pc_offset_mux_sel_Dhl = ~steering_mux_sel;
 
   // Muldiv Function
 
-  assign muldivreq_msg_fn_Dhl = cs0[`PARC_INST_MSG_MULDIV_FN];
+  assign muldivreq_msg_fn_Dhl = cs_Dhl[`PARC_INST_MSG_MULDIV_FN];
 
   // Muldiv Controls
 
-  wire muldivreq_val_Dhl = cs0[`PARC_INST_MSG_MULDIV_EN];
+  wire muldivreq_val_Dhl = cs_Dhl[`PARC_INST_MSG_MULDIV_EN];
 
   // Muldiv Mux Select
 
-  wire muldiv_mux_sel_Dhl = cs0[`PARC_INST_MSG_MULDIV_SEL];
+  wire muldiv_mux_sel_Dhl = cs_Dhl[`PARC_INST_MSG_MULDIV_SEL];
 
   // Execute Mux Select
 
-  wire execute_mux_sel_Dhl = cs0[`PARC_INST_MSG_MULDIV_EN];
+  wire execute_mux_sel_Dhl = cs_Dhl[`PARC_INST_MSG_MULDIV_EN];
 
-  wire       is_load_Dhl         = ( cs0[`PARC_INST_MSG_MEM_REQ] == ld );
+  wire       is_load_Dhl         = ( cs_Dhl[`PARC_INST_MSG_MEM_REQ] == ld );
 
-  wire       dmemreq_msg_rw_Dhl  = ( cs0[`PARC_INST_MSG_MEM_REQ] == st );
-  wire [1:0] dmemreq_msg_len_Dhl = cs0[`PARC_INST_MSG_MEM_LEN];
-  wire       dmemreq_val_Dhl     = ( cs0[`PARC_INST_MSG_MEM_REQ] != nr );
+  wire       dmemreq_msg_rw_Dhl  = ( cs_Dhl[`PARC_INST_MSG_MEM_REQ] == st );
+  wire [1:0] dmemreq_msg_len_Dhl = cs_Dhl[`PARC_INST_MSG_MEM_LEN];
+  wire       dmemreq_val_Dhl     = ( cs_Dhl[`PARC_INST_MSG_MEM_REQ] != nr );
 
   // Memory response mux select
 
-  wire [2:0] dmemresp_mux_sel_Dhl = cs0[`PARC_INST_MSG_MEM_SEL];
+  wire [2:0] dmemresp_mux_sel_Dhl = cs_Dhl[`PARC_INST_MSG_MEM_SEL];
 
   // Writeback Mux Select
 
-  wire memex_mux_sel_Dhl = cs0[`PARC_INST_MSG_WB_SEL];
+  wire memex_mux_sel_Dhl = cs_Dhl[`PARC_INST_MSG_WB_SEL];
 
   // Register Writeback Controls
 
-  wire rf0_wen_Dhl         = cs0[`PARC_INST_MSG_RF_WEN];
-  wire [4:0] rf0_waddr_Dhl = cs0[`PARC_INST_MSG_RF_WADDR];
+  wire rf0_wen_Dhl         = cs_Dhl[`PARC_INST_MSG_RF_WEN];
+  wire [4:0] rf0_waddr_Dhl = cs_Dhl[`PARC_INST_MSG_RF_WADDR];
 
   // Coprocessor write enable
 
-  wire cp0_wen_Dhl = cs0[`PARC_INST_MSG_CP0_WEN];
+  wire cp0_wen_Dhl = cs_Dhl[`PARC_INST_MSG_CP0_WEN];
 
   // Coprocessor register specifier
 
-  wire [4:0] cp0_addr_Dhl = inst0_rd_Dhl;
+  wire [4:0] cp0_addr_Dhl = ( steering_mux_sel == 1'b0 ) ? inst0_rd_Dhl : inst1_rd_Dhl;
 
   //----------------------------------------------------------------------
   // Squash and Stall Logic
@@ -942,7 +992,11 @@ module parc_CoreCtrl
 
   // Aggregate Stall Signal
 
-  assign stall_Dhl = (stall_X0hl || stall_0_muldiv_use_Dhl || stall_0_load_use_Dhl);
+  assign stall_Dhl
+    = ( stall_X0hl
+     || stall_0_muldiv_use_Dhl
+     || stall_0_load_use_Dhl
+     || waiting_for_pair_Dhl );
 
   wire stall_0_Dhl = stall_Dhl;
   wire stall_1_Dhl = 1'b0;
@@ -961,6 +1015,7 @@ module parc_CoreCtrl
   reg [31:0] ir0_X0hl;
   reg  [2:0] br_sel_X0hl;
   reg  [3:0] alu0_fn_X0hl;
+  reg  [3:0] alu1_fn_X0hl;
   reg        muldivreq_val_X0hl;
   reg  [2:0] muldivreq_msg_fn_X0hl;
   reg        muldiv_mux_sel_X0hl;
@@ -983,12 +1038,32 @@ module parc_CoreCtrl
 
   always @ ( posedge clk ) begin
     if ( reset ) begin
+      ir0_X0hl              <= `PARC_INST_MSG_NOP;
+      br_sel_X0hl           <= br_none;
+      alu0_fn_X0hl          <= alu_add;
+      alu1_fn_X0hl          <= alu_add;
+      muldivreq_val_X0hl    <= 1'b0;
+      muldivreq_msg_fn_X0hl <= md_mul;
+      muldiv_mux_sel_X0hl   <= mdm_l;
+      execute_mux_sel_X0hl  <= em_alu;
+      is_load_X0hl          <= 1'b0;
+      is_muldiv_X0hl        <= 1'b0;
+      dmemreq_msg_rw_X0hl   <= 1'b0;
+      dmemreq_msg_len_X0hl  <= ml_w;
+      dmemreq_val_X0hl      <= 1'b0;
+      dmemresp_mux_sel_X0hl <= dmm_w;
+      memex_mux_sel_X0hl    <= wm_alu;
+      rf0_wen_X0hl          <= 1'b0;
+      rf0_waddr_X0hl        <= 5'd0;
+      cp0_wen_X0hl          <= 1'b0;
+      cp0_addr_X0hl         <= 5'd0;
       bubble_X0hl <= 1'b1;
     end
     else if( !stall_X0hl ) begin
       ir0_X0hl              <= ir0_Dhl;
       br_sel_X0hl           <= br_sel_Dhl;
       alu0_fn_X0hl          <= alu0_fn_Dhl;
+      alu1_fn_X0hl          <= alu1_fn_Dhl;
       muldivreq_val_X0hl    <= muldivreq_val_Dhl;
       muldivreq_msg_fn_X0hl <= muldivreq_msg_fn_Dhl;
       muldiv_mux_sel_X0hl   <= muldiv_mux_sel_Dhl;
@@ -1041,22 +1116,20 @@ module parc_CoreCtrl
 
   // Resolve Branch
 
-  wire beq_taken_X0hl  = ( ( br_sel_X0hl == br_beq ) && beq_resolve_X0hl );
-  wire bne_taken_X0hl  = ( ( br_sel_X0hl == br_bne ) && bne_resolve_X0hl );
-  wire blez_taken_X0hl = ( ( br_sel_X0hl == br_blez ) && blez_resolve_X0hl );
-  wire bgtz_taken_X0hl = ( ( br_sel_X0hl == br_bgtz ) && bgtz_resolve_X0hl );
-  wire bltz_taken_X0hl = ( ( br_sel_X0hl == br_bltz ) && bltz_resolve_X0hl );
-  wire bgez_taken_X0hl = ( ( br_sel_X0hl == br_bgez ) && bgez_resolve_X0hl );
+  reg any_br_taken_X0hl;
+  always @ (*) begin
+    case ( br_sel_X0hl )
+      br_beq  : any_br_taken_X0hl = beq_resolve_X0hl;
+      br_bne  : any_br_taken_X0hl = bne_resolve_X0hl;
+      br_blez : any_br_taken_X0hl = blez_resolve_X0hl;
+      br_bgtz : any_br_taken_X0hl = bgtz_resolve_X0hl;
+      br_bltz : any_br_taken_X0hl = bltz_resolve_X0hl;
+      br_bgez : any_br_taken_X0hl = bgez_resolve_X0hl;
+      default : any_br_taken_X0hl = 1'b0;
+    endcase
+  end
 
-  wire any_br_taken_X0hl
-    = ( beq_taken_X0hl
-   ||   bne_taken_X0hl
-   ||   blez_taken_X0hl
-   ||   bgtz_taken_X0hl
-   ||   bltz_taken_X0hl
-   ||   bgez_taken_X0hl );
-
-  wire brj_taken_X0hl = ( inst_val_X0hl && any_br_taken_X0hl );
+  wire brj_taken_X0hl = ( inst_val_X0hl === 1'b1 ) && any_br_taken_X0hl;
 
   // Dummy Squash Signal
 
@@ -1521,4 +1594,3 @@ module parc_CoreCtrl
 endmodule
 
 `endif
-
