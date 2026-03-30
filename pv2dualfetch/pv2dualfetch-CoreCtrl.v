@@ -160,8 +160,10 @@ module parc_CoreCtrl
   // Exception: if the currently-issued instruction is a D-stage
   // control transfer (j/jal/jr/jalr), we must allow F to update PC
   // immediately, otherwise the redirect gets dropped.
-  assign stall_Fhl = stall_Dhl
-                  || ( steering_mux_sel && !brj_taken_Dhl && !brj_taken_X0hl );
+  assign stall_Fhl
+    = ( stall_Dhl || steering_mux_sel )
+      && !brj_taken_Dhl
+      && !brj_taken_X0hl;
 
   // Next bubble bit
 
