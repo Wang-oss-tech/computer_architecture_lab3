@@ -5,7 +5,7 @@ VCD info: dumpfile ../tests/build/vmh/parcv1-bne.vcd opened for output.
  STATS                                      
 --------------------------------------------
  status     =          1
- num_cycles =         35
- num_inst   =         19
- ipc        = 0.542857
-../pv2dualfetch/pv2dualfetch-sim.v:493: $finish called at 405 (1s)
+ num_cycles =        190
+ num_inst   =        130
+ ipc        = 0.684211
+../pv2dualfetch/pv2dualfetch-sim.v:493: $finish called at 1955 (1s)

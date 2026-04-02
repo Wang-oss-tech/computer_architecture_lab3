@@ -5,7 +5,7 @@ VCD info: dumpfile ../tests/build/vmh/parcv2-j-rand.vcd opened for output.
  STATS                                      
 --------------------------------------------
  status     =          1
- num_cycles =         73
+ num_cycles =         83
  num_inst   =         13
- ipc        = 0.178082
-../pv2dualfetch/pv2dualfetch-randdelay-sim.v:493: $finish called at 825 (1s)
+ ipc        = 0.156627
+../pv2dualfetch/pv2dualfetch-randdelay-sim.v:493: $finish called at 925 (1s)
