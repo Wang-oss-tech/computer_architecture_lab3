@@ -548,32 +548,32 @@ module parc_CoreCtrl
   //                             && ( rf_waddr_Whl != 5'd0 ) ) );
 
 
-wire rs_bypass_Xhl =  inst_val_Dhl && ~is_load && 
+wire rs_bypass_Xhl =  inst_val_Dhl &&
                             ( rs_en_Dhl && inst_val_Xhl && rf_wen_Xhl
                               && ( rs_addr_Dhl == rf_waddr_Xhl )
                               && ( rf_waddr_Xhl != 5'd0 ) );
 
-wire rs_bypass_Mhl = inst_val_Dhl && ~is_load && 
+wire rs_bypass_Mhl = inst_val_Dhl &&
                             ( rs_en_Dhl && inst_val_Mhl && rf_wen_Mhl
                               && ( rs_addr_Dhl == rf_waddr_Mhl )
                               && ( rf_waddr_Mhl != 5'd0 ) );
 
-wire rs_bypass_Whl = inst_val_Dhl && ~is_load && 
+wire rs_bypass_Whl = inst_val_Dhl &&
                             ( rs_en_Dhl && inst_val_Whl && rf_wen_Whl
                               && ( rs_addr_Dhl == rf_waddr_Whl )
                               && ( rf_waddr_Whl != 5'd0 ) );
 
-wire rt_bypass_Xhl = inst_val_Dhl && ~is_load && 
+wire rt_bypass_Xhl = inst_val_Dhl &&
                             ( rt_en_Dhl && inst_val_Xhl && rf_wen_Xhl
                               && ( rt_addr_Dhl == rf_waddr_Xhl )
                               && ( rf_waddr_Xhl != 5'd0 ) );
 
-wire rt_bypass_Mhl = inst_val_Dhl && ~is_load && 
+wire rt_bypass_Mhl = inst_val_Dhl &&
                             ( rt_en_Dhl && inst_val_Mhl && rf_wen_Mhl
                               && ( rt_addr_Dhl == rf_waddr_Mhl )
                               && ( rf_waddr_Mhl != 5'd0 ) );
 
-wire rt_bypass_Whl = inst_val_Dhl && ~is_load &&
+wire rt_bypass_Whl = inst_val_Dhl &&
                             ( rt_en_Dhl && inst_val_Whl && rf_wen_Whl
                               && ( rt_addr_Dhl == rf_waddr_Whl )
                               && ( rf_waddr_Whl != 5'd0 ) );

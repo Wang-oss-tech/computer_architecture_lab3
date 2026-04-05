@@ -6,6 +6,6 @@ VCD info: dumpfile ../tests/build/vmh/parcv2-bltz.vcd opened for output.
 --------------------------------------------
  status     =          1
  num_cycles =         78
- num_inst   =         42
- ipc        = 0.538462
+ num_inst   =         46
+ ipc        = 0.589744
 ../pv2ssc/pv2ssc-sim.v:493: $finish called at 835 (1s)

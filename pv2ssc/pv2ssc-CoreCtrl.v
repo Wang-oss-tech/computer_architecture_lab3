@@ -259,7 +259,9 @@ module parc_CoreCtrl
 
   wire squash_first_D_inst =
     (inst_val_Dhl && !stall_0_Dhl && stall_1_Dhl);
-  wire squash_redirect_Dhl = squash_Dhl || ( inst_val_Dhl && brj_taken_Dhl );
+  // D-stage redirect handling for a deferred higher-address instruction is
+  // done in the D<-F update when decode is not stalled.
+  wire squash_redirect_Dhl = squash_Dhl;
 
   always @ ( posedge clk ) begin
     if ( reset ) begin
@@ -275,7 +277,14 @@ module parc_CoreCtrl
       bubble_Dhl <= 1'b1;
     end
     else if( !stall_Dhl ) begin
-      if ( load_new_pair_Dhl ) begin
+      if ( inst_val_Dhl && brj_taken_Dhl && defer_hi_Dhl ) begin
+        // Taken control transfer in low slot: kill deferred high slot.
+        ir0_Dhl <= `PARC_INST_MSG_NOP;
+        ir1_Dhl <= `PARC_INST_MSG_NOP;
+        steering_mux_sel <= 1'b0;
+        bubble_Dhl <= 1'b1;
+      end
+      else if ( load_new_pair_Dhl ) begin
         // Keep the lower-address instruction in ir1 and the higher-address
         // instruction in ir0 so we can steer them to A/B or defer the higher
         // instruction on the following cycle.
@@ -745,7 +754,9 @@ module parc_CoreCtrl
 
   // Jump and Branch Controls
 
-  wire       brj_taken_Dhl = ( inst_val_Dhl === 1'b1 ) && csA_Dhl[`PARC_INST_MSG_J_EN];
+  wire       brj_taken_Dhl
+    = ( inst_val_Dhl === 1'b1 )
+   && ( csA_Dhl[`PARC_INST_MSG_J_EN] === 1'b1 );
   wire [2:0] br_sel_Dhl    = csA_Dhl[`PARC_INST_MSG_BR_SEL];
 
   // PC Mux Select
@@ -936,6 +947,9 @@ module parc_CoreCtrl
 
   // For Part 2 of this lab, replace the multdiv and ld stall logic with a scoreboard based stall logic
 
+  wire stall_muldiv_req_Dhl
+    = inst_val_Dhl && muldivreq_val_Dhl && !muldivreq_rdy;
+
   wire rs0_wait_sb_Dhl
     = rs0_en_Dhl
    && ( rs0_addr_Dhl != 5'd0 )
@@ -988,6 +1002,7 @@ module parc_CoreCtrl
 
   assign stall_Dhl
     = ( stall_X0hl
+     || stall_muldiv_req_Dhl
      || stall_0_scoreboard_Dhl
      || stall_first_pipe_hazard_Dhl
      || waiting_for_pair_Dhl );
@@ -1098,7 +1113,7 @@ module parc_CoreCtrl
 
   // Muldiv request
 
-  assign muldivreq_val = muldivreq_val_Dhl && inst_val_Dhl;
+  assign muldivreq_val = muldivreq_val_Dhl && inst_val_Dhl && !stall_Dhl;
   assign muldivresp_rdy = 1'b1;
   assign muldiv_stall_mult1 = stall_X1hl;
 
@@ -1110,12 +1125,16 @@ module parc_CoreCtrl
 
   // Branch Conditions
 
-  wire beq_resolve_X0hl  = branch_cond_eq_X0hl;
-  wire bne_resolve_X0hl  = ~branch_cond_eq_X0hl;
-  wire blez_resolve_X0hl = branch_cond_zero_X0hl | branch_cond_neg_X0hl;
-  wire bgtz_resolve_X0hl = ~( branch_cond_zero_X0hl | branch_cond_neg_X0hl );
-  wire bltz_resolve_X0hl = branch_cond_neg_X0hl;
-  wire bgez_resolve_X0hl = branch_cond_zero_X0hl | ~branch_cond_neg_X0hl;
+  // Use case-equality so unknown branch condition bits do not propagate X
+  // into control flow (treat unknown compare results as not-taken).
+  wire beq_resolve_X0hl  = ( branch_cond_eq_X0hl   === 1'b1 );
+  wire bne_resolve_X0hl  = ( branch_cond_eq_X0hl   === 1'b0 );
+  wire blez_resolve_X0hl = ( branch_cond_zero_X0hl === 1'b1 )
+                         || ( branch_cond_neg_X0hl  === 1'b1 );
+  wire bgtz_resolve_X0hl = ( branch_cond_zero_X0hl === 1'b0 )
+                         && ( branch_cond_neg_X0hl  === 1'b0 );
+  wire bltz_resolve_X0hl = ( branch_cond_neg_X0hl  === 1'b1 );
+  wire bgez_resolve_X0hl = ( branch_cond_neg_X0hl  === 1'b0 );
 
   // Resolve Branch
 
@@ -1132,7 +1151,9 @@ module parc_CoreCtrl
     endcase
   end
 
-  wire brj_taken_X0hl = ( inst_val_X0hl === 1'b1 ) && any_br_taken_X0hl;
+  wire brj_taken_X0hl
+    = ( inst_val_X0hl === 1'b1 )
+   && ( any_br_taken_X0hl === 1'b1 );
 
   // Dummy Squash Signal
 

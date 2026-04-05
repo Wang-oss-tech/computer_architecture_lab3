@@ -6,6 +6,6 @@ VCD info: dumpfile ../tests/build/vmh/parcv1-lw-rand.vcd opened for output.
 --------------------------------------------
  status     =          1
  num_cycles =        947
- num_inst   =        128
- ipc        = 0.135164
+ num_inst   =        155
+ ipc        = 0.163675
 ../pv2ssc/pv2ssc-randdelay-sim.v:493: $finish called at 9565 (1s)

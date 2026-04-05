@@ -6,6 +6,6 @@ VCD info: dumpfile ../tests/build/vmh/parcv2-subu.vcd opened for output.
 --------------------------------------------
  status     =          1
  num_cycles =        212
- num_inst   =        160
- ipc        = 0.754717
+ num_inst   =        212
+ ipc        = 1.000000
 ../pv2ssc/pv2ssc-sim.v:493: $finish called at 2175 (1s)
