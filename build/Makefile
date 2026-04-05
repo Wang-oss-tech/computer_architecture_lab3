@@ -96,6 +96,28 @@ tests = \
   parcv2-subu.vmh \
   parcv2-xori.vmh \
   parcv2-xor.vmh \
+  parcv2-waw-dualdecode.vmh \
+  parcv2-nonalu-dualdecode.vmh \
+
+#-------------------------------------------------------------------------
+# Auto-generate locally added assembly test VMHs (if missing)
+#-------------------------------------------------------------------------
+
+extra_tests_vmh = \
+  parcv2-waw-dualdecode.vmh \
+  parcv2-nonalu-dualdecode.vmh \
+
+$(extra_tests_vmh) :
+	@set -e; \
+  name='$(basename $@)'; \
+  $(MAKE) -C $(topdir)/tests/build $$name; \
+  cd $(topdir)/tests/build; \
+  mkdir -p dump vmh; \
+  maven-objdump -D --disassemble-zeroes --section=.xcpthandler --section=.text --section=.data \
+    $$name > dump/$$name.dump; \
+  python3 ../scripts/objdump2vmh.py -f dump/$$name.dump; \
+  mv -f dump/$$name.vmh vmh/$$name.vmh; \
+  cp -f vmh/$$name.vmh $(CURDIR)/$@
 
 pv2stall_rtl_sim = pv2stall-sim
 pv2stall_rtl_rand_sim = pv2stall-randdelay-sim
@@ -186,6 +208,7 @@ junk += $(dualfetch_tests_outs)
 junk += $(dualfetch_tests_rand_outs)
 junk += $(ssc_tests_outs)
 junk += $(ssc_tests_rand_outs)
+junk += $(extra_tests_vmh)
 
 #-------------------------------------------------------------------------
 # List of Benchmarks
@@ -416,4 +439,3 @@ clean :
 	rm -rf *~ \#* *.vcd $(junk)
 
 .PHONY : clean
-
