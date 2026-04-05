@@ -5,7 +5,7 @@ VCD info: dumpfile ../tests/build/vmh/parcv2-remu.vcd opened for output.
  STATS                                      
 --------------------------------------------
  status     =          1
- num_cycles =        378
- num_inst   =        287
- ipc        = 0.759259
-../pv2ssc/pv2ssc-sim.v:493: $finish called at 3835 (1s)
+ num_cycles =        338
+ num_inst   =        206
+ ipc        = 0.609467
+../pv2ssc/pv2ssc-sim.v:493: $finish called at 3435 (1s)

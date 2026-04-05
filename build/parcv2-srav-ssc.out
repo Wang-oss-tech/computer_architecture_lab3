@@ -5,7 +5,7 @@ VCD info: dumpfile ../tests/build/vmh/parcv2-srav.vcd opened for output.
  STATS                                      
 --------------------------------------------
  status     =          1
- num_cycles =        284
- num_inst   =        280
- ipc        = 0.985915
-../pv2ssc/pv2ssc-sim.v:493: $finish called at 2895 (1s)
+ num_cycles =        279
+ num_inst   =        208
+ ipc        = 0.745520
+../pv2ssc/pv2ssc-sim.v:493: $finish called at 2845 (1s)
